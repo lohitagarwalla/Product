@@ -188,6 +188,8 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.UseOutputCache(); // Add here
+
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Welcome}/{action=Documentation}");
