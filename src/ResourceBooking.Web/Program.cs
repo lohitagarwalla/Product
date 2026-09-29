@@ -133,6 +133,16 @@ builder.Services.AddControllers(options =>
     options.Filters.Add<LogExecutionTimeFilter>();
 });
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("ReactApp", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 var app = builder.Build();
 
 // 2. Add Exception Middleware as the VERY FIRST component in the HTTP pipeline
@@ -184,6 +194,8 @@ app.UseWhen(context => !context.Request.Path.StartsWithSegments("/api"), branch 
 
 app.UseStaticFiles();
 app.UseRouting();
+
+app.UseCors("ReactApp");
 
 app.UseAuthentication();
 app.UseAuthorization();
