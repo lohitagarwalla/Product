@@ -1,9 +1,12 @@
 ﻿using ResourceBooking.Core.Enums;
 
+using ResourceBooking.Core.Interfaces;
+
 namespace ResourceBooking.Core.Entities;
 
-public class Booking : BaseEntity
+public class Booking : BaseEntity, ISoftDeletable
 {
+    public bool IsDeleted { get; set; }
     public int ResourceId { get; set; }
     public Resource Resource { get; set; } = null!;
 

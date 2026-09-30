@@ -8,6 +8,7 @@ using ResourceBooking.Core.Interfaces;
 using ResourceBooking.Infrastructure.Data;
 using ResourceBooking.Infrastructure.Repositories;
 using ResourceBooking.Infrastructure.Services;
+using ResourceBooking.Infrastructure.Storage;
 using ResourceBooking.Web.Filters;
 using ResourceBooking.Web.Middleware;
 using Scalar.AspNetCore;
@@ -71,6 +72,21 @@ builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 // Register Domain Services
 builder.Services.AddScoped<IBookingService, BookingService>();
 builder.Services.AddScoped<ITodoService, TodoService>();
+builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IImageService, ImageService>();
+builder.Services.AddSingleton<IImageStorage, LocalImageStorage>();
+builder.Services.AddScoped<ImageCleanupService>();
+builder.Services.AddHostedService<ImageCleanupWorker>();
+builder.Services.AddOptions<ImageStorageOptions>()
+    .Bind(builder.Configuration.GetSection("ImageStorage"))
+    .Validate(o => !string.IsNullOrWhiteSpace(o.RootPath), "Image storage root is required.")
+    .Validate(o => o.MaxFileSizeBytes > 0 && o.MaxFileSizeBytes <= 20 * 1024 * 1024,
+        "Image size must be between 1 byte and 20 MB.")
+    .Validate(o => o.MaxDimension > 0 && o.MaxDimension <= 10000 && o.MaxPixels > 0 && o.MaxPixels <= 25000000,
+        "Image dimension limits are invalid.")
+    .Validate(o => o.MaxImagesPerProduct > 0 && o.MaxImagesPerProduct <= 100 && o.DeletedProductRetentionDays >= 0,
+        "Image count or retention settings are invalid.")
+    .ValidateOnStart();
 
 // 1. Add Custom Account Service
 builder.Services.AddScoped<IAccountService, AccountService>();

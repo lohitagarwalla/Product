@@ -27,7 +27,8 @@ public class GenericRepository<T> : IGenericRepository<T> where T : BaseEntity
 
     public void Update(T entity) => _context.Set<T>().Update(entity);
 
-    public void Delete(T entity) => _context.Set<T>().Remove(entity); // Handled as soft-delete by DbContext interceptor
+    // DbContext soft-deletes ISoftDeletable entities; other entities are permanently removed.
+    public void Delete(T entity) => _context.Set<T>().Remove(entity);
 
     public async Task<bool> SaveChangesAsync() => await _context.SaveChangesAsync() > 0;
 }

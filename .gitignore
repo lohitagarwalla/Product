@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Local uploaded files (outside wwwroot; metadata lives in SQL).
+**/App_Data/
+
 # User-specific files
 *.rsuser
 *.suo

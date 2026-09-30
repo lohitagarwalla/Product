@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace ResourceBooking.Web.Middleware;
 
@@ -45,6 +46,13 @@ public class GlobalExceptionMiddleware
 
         switch (exception)
         {
+            case DbUpdateConcurrencyException:
+                context.Response.StatusCode = (int)HttpStatusCode.Conflict;
+                problemDetails.Status = (int)HttpStatusCode.Conflict;
+                problemDetails.Title = "Concurrent update";
+                problemDetails.Detail = "This item changed during your request. Reload it and retry.";
+                break;
+
             case InvalidOperationException invalidOpEx:
                 // Domain validation or business rule violation
                 context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
