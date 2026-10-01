@@ -42,6 +42,16 @@ public class ImageCleanupService(ApplicationDbContext db, IImageStorage storage,
 public class ImageCleanupWorker(IServiceScopeFactory scopes, IOptions<ImageStorageOptions> options,
     ILogger<ImageCleanupWorker> logger) : BackgroundService
 {
+    // BackgroundService provides the start/stop lifecycle for a long-running background task.
+    // We override ExecuteAsync to define the cleanup loop, without needing an HTTP request to trigger it.
+    // Program.cs uses AddHostedService<ImageCleanupWorker>() to register one worker instance with DI
+    // as an IHostedService, which tells the application host to start it and stop it during shutdown.
+    // AddHostedService gives it a singleton lifetime: the same worker instance is reused for every
+    // cleanup run in this application host, rather than creating one per request or timer tick.
+    // Each separately running application instance has its own worker; this is not a shared global singleton.
+    // Inheriting BackgroundService (or using only AddSingleton) does not register it as a hosted service.
+    // At startup, the host calls StartAsync; BackgroundService then calls our ExecuteAsync override.
+    // At shutdown, its StopAsync cancels stoppingToken so the loop and pending operations can stop gracefully.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!options.Value.CleanupEnabled) return;
@@ -52,9 +62,12 @@ public class ImageCleanupWorker(IServiceScopeFactory scopes, IOptions<ImageStora
             {
                 try
                 {
+                    // The worker is a singleton, but ImageCleanupService and its DbContext are scoped.
+                    // Resolve them inside a fresh scope for each run instead of injecting them into the
+                    // worker's constructor. The using statement disposes the scope and those services after the run.
                     using var scope = scopes.CreateScope();
                     await scope.ServiceProvider.GetRequiredService<ImageCleanupService>().RunAsync(stoppingToken);
-                }
+                } 
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     logger.LogWarning(ex, "Image cleanup could not run; it will be retried.");
