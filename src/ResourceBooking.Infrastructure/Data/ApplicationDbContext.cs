@@ -19,6 +19,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ImageAsset> ImageAssets => Set<ImageAsset>();
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<OrderStatusHistory> OrderStatusHistory => Set<OrderStatusHistory>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -43,6 +46,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     private void PrepareChanges()
     {
+        if (ChangeTracker.Entries<OrderStatusHistory>().Any(e =>
+            e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Order status history is append-only.");
+
         // Soft deletion is opt-in, independent of shared identity and timestamps.
         foreach (var entry in ChangeTracker.Entries<ISoftDeletable>()
                      .Where(e => e.State == EntityState.Deleted).ToList())

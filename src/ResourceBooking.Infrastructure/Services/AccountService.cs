@@ -70,7 +70,8 @@ public class AccountService : IAccountService
             Token = token,
             UserId = user.Id,
             Email = user.Email,
-            Roles = roles.ToList()
+            Roles = roles.ToList(),
+            FirstName = user.FirstName
         };
     }
 
@@ -101,7 +102,8 @@ public class AccountService : IAccountService
             Token = token,
             UserId = user.Id,
             Email = user.Email ?? string.Empty,
-            Roles = roles.ToList()
+            Roles = roles.ToList(),
+            FirstName = user.FirstName
         };
     }
 

@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ResourceBooking.Core.Exceptions;
 
 namespace ResourceBooking.Web.Middleware;
 
@@ -46,6 +47,13 @@ public class GlobalExceptionMiddleware
 
         switch (exception)
         {
+            case OrderConflictException orderConflict:
+                context.Response.StatusCode = (int)HttpStatusCode.Conflict;
+                problemDetails.Status = (int)HttpStatusCode.Conflict;
+                problemDetails.Title = "Order conflict";
+                problemDetails.Detail = orderConflict.Message;
+                break;
+
             case DbUpdateConcurrencyException:
                 context.Response.StatusCode = (int)HttpStatusCode.Conflict;
                 problemDetails.Status = (int)HttpStatusCode.Conflict;

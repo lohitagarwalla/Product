@@ -73,6 +73,7 @@ builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 builder.Services.AddScoped<IBookingService, BookingService>();
 builder.Services.AddScoped<ITodoService, TodoService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddSingleton<IImageStorage, LocalImageStorage>();
 builder.Services.AddScoped<ImageCleanupService>();
@@ -216,7 +217,7 @@ app.UseCors("ReactApp");
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.UseOutputCache(); // Add here
+app.UseOutputCache();
 
 app.MapControllerRoute(
     name: "default",
