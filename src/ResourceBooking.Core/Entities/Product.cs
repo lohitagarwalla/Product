@@ -14,4 +14,5 @@ public class Product : BaseEntity, ISoftDeletable
     // Every edit, including image changes, participates in optimistic concurrency.
     public Guid Version { get; set; } = Guid.NewGuid();
     public ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
+    public ICollection<ProductPriceHistory> PriceHistory { get; set; } = new List<ProductPriceHistory>();
 }

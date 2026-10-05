@@ -34,21 +34,63 @@ public class ProductService(ApplicationDbContext db, IImageService images, IOpti
         return product is null ? null : ToDto(product);
     }
 
-    public async Task<ProductResponseDto> CreateAsync(ProductWriteDto dto, CancellationToken ct)
+    public async Task<ProductResponseDto> CreateAsync(ProductWriteDto dto, string userId, CancellationToken ct)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
         var product = new Product();
         Apply(product, dto);
+        product.PriceHistory.Add(new ProductPriceHistory
+        {
+            NewPrice = product.Price, ChangedByUserId = userId, ChangedAtUtc = DateTime.UtcNow,
+            EntryType = ProductPriceHistoryEntryType.Created
+        });
         db.Products.Add(product);
         await db.SaveChangesAsync(ct);
         return ToDto(product);
     }
 
-    public async Task<ProductResponseDto> UpdateAsync(int id, ProductWriteDto dto, CancellationToken ct)
+    public async Task<ProductResponseDto> UpdateAsync(int id, ProductWriteDto dto, string userId, CancellationToken ct)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
         var product = await FindAsync(id, ct);
+        var previousPrice = product.Price;
         Apply(product, dto);
+        if (previousPrice != product.Price)
+        {
+            db.ProductPriceHistory.Add(new ProductPriceHistory
+            {
+                ProductId = product.Id, PreviousPrice = previousPrice, NewPrice = product.Price,
+                ChangedByUserId = userId, ChangedAtUtc = DateTime.UtcNow,
+                EntryType = ProductPriceHistoryEntryType.PriceChanged
+            });
+        }
+        // The product update and audit entry share one SQL transaction, including concurrency checks.
         await SaveAsync(product, ct);
         return ToDto(product);
+    }
+
+    public async Task<ProductPriceHistoryPageDto> GetPriceHistoryAsync(int id, ProductPriceHistoryQueryDto query,
+        CancellationToken ct)
+    {
+        if (!await db.Products.IgnoreQueryFilters().AnyAsync(p => p.Id == id, ct))
+            throw new KeyNotFoundException("Product not found.");
+        var history = db.ProductPriceHistory.AsNoTracking().Where(h => h.ProductId == id);
+        var count = await history.CountAsync(ct);
+        var page = await history.OrderByDescending(h => h.ChangedAtUtc).ThenByDescending(h => h.Id)
+            .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync(ct);
+        var actorIds = page.Where(h => h.ChangedByUserId != null).Select(h => h.ChangedByUserId!).Distinct().ToList();
+        // Resolve all actors in one query; history continues to retain the original actor ID.
+        var actors = await db.Users.AsNoTracking().Where(u => actorIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.UserName }).ToListAsync(ct);
+        var actorNames = actors.ToDictionary(u => u.Id, u =>
+        {
+            var fullName = $"{u.FirstName} {u.LastName}".Trim();
+            return string.IsNullOrWhiteSpace(fullName) ? u.UserName : fullName;
+        });
+        return new(page.Select(h => new ProductPriceHistoryResponseDto(h.Id, h.ProductId,
+            h.PreviousPrice, h.NewPrice, h.ChangedByUserId, h.ChangedAtUtc, h.EntryType.ToString(),
+            h.ChangedByUserId is not null && actorNames.TryGetValue(h.ChangedByUserId, out var name) ? name : null)).ToList(),
+            count, query.Page, query.PageSize);
     }
 
     public async Task DeleteAsync(int id, CancellationToken ct)

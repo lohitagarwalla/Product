@@ -33,13 +33,24 @@ public class ProductsController(IProductService products) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ProductResponseDto>> Create(ProductWriteDto dto, CancellationToken ct)
     {
-        var product = await products.CreateAsync(dto, ct);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
+        var product = await products.CreateAsync(dto, userId, ct);
         return CreatedAtAction(nameof(Get), new { id = product.Id }, product);
     }
 
     [HttpPut("{id:int}")]
-    public async Task<ActionResult<ProductResponseDto>> Update(int id, ProductWriteDto dto, CancellationToken ct) =>
-        Ok(await products.UpdateAsync(id, dto, ct));
+    public async Task<ActionResult<ProductResponseDto>> Update(int id, ProductWriteDto dto, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
+        return Ok(await products.UpdateAsync(id, dto, userId, ct));
+    }
+
+    [HttpGet("{id:int}/price-history")]
+    public async Task<ActionResult<ProductPriceHistoryPageDto>> PriceHistory(int id,
+        [FromQuery] ProductPriceHistoryQueryDto query, CancellationToken ct) =>
+        Ok(await products.GetPriceHistoryAsync(id, query, ct));
 
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)

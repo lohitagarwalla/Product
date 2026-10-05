@@ -17,6 +17,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<TodoItem> TodoItems => Set<TodoItem>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductPriceHistory> ProductPriceHistory => Set<ProductPriceHistory>();
     public DbSet<ImageAsset> ImageAssets => Set<ImageAsset>();
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
     public DbSet<Order> Orders => Set<Order>();
@@ -46,6 +47,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     private void PrepareChanges()
     {
+        if (ChangeTracker.Entries<ProductPriceHistory>().Any(e =>
+            e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Product price history is append-only.");
+
         if (ChangeTracker.Entries<OrderStatusHistory>().Any(e =>
             e.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Order status history is append-only.");

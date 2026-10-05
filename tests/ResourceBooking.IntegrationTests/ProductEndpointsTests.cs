@@ -271,9 +271,10 @@ public class ProductEndpointsTests(ProductWebApplicationFactory factory) : IClas
         var secondDb = second.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         await firstDb.Products.SingleAsync(p => p.Id == product.Id);
         await secondDb.Products.SingleAsync(p => p.Id == product.Id);
-        await first.ServiceProvider.GetRequiredService<IProductService>().UpdateAsync(product.Id, Product(), default);
+        var userId = await firstDb.Users.Where(u => u.Email == "admin@company.com").Select(u => u.Id).SingleAsync();
+        await first.ServiceProvider.GetRequiredService<IProductService>().UpdateAsync(product.Id, Product(), userId, default);
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
-            second.ServiceProvider.GetRequiredService<IProductService>().UpdateAsync(product.Id, Product(), default));
+            second.ServiceProvider.GetRequiredService<IProductService>().UpdateAsync(product.Id, Product(), userId, default));
     }
 
     private async Task CleanupAsync()
