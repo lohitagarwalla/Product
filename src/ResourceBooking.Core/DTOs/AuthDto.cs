@@ -7,6 +7,10 @@ public class RegisterDto
     [Required, EmailAddress]
     public string Email { get; set; } = string.Empty;
 
+    [RegularExpression(@"\A(?:\+91)?[6-9][0-9]{9}\z",
+        ErrorMessage = "Enter a valid Indian mobile number: 10 digits starting with 6, 7, 8, or 9, optionally prefixed with +91.")]
+    public string? PhoneNumber { get; set; }
+
     [Required]
     [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters long.")]
     [DataType(DataType.Password)]

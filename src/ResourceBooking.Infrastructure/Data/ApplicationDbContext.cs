@@ -23,6 +23,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<OrderStatusHistory> OrderStatusHistory => Set<OrderStatusHistory>();
+    public DbSet<UserAddress> UserAddresses => Set<UserAddress>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

@@ -47,6 +47,13 @@ public class GlobalExceptionMiddleware
 
         switch (exception)
         {
+            case AddressConflictException addressConflict:
+                context.Response.StatusCode = (int)HttpStatusCode.Conflict;
+                problemDetails.Status = (int)HttpStatusCode.Conflict;
+                problemDetails.Title = "Address conflict";
+                problemDetails.Detail = addressConflict.Message;
+                break;
+
             case OrderConflictException orderConflict:
                 context.Response.StatusCode = (int)HttpStatusCode.Conflict;
                 problemDetails.Status = (int)HttpStatusCode.Conflict;

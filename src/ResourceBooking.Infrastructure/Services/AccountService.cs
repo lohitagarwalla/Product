@@ -43,6 +43,11 @@ public class AccountService : IAccountService
         {
             UserName = dto.Email,
             Email = dto.Email,
+            PhoneNumber = string.IsNullOrEmpty(dto.PhoneNumber)
+                ? null
+                : dto.PhoneNumber.StartsWith("+91", StringComparison.Ordinal)
+                    ? dto.PhoneNumber
+                    : $"+91{dto.PhoneNumber}",
             FirstName = dto.FirstName,
             LastName = dto.LastName,
             Department = dto.Department

@@ -11,4 +11,5 @@ public class ApplicationUser : IdentityUser
 
     // Navigation Property: One user can have many bookings
     public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
+    public ICollection<UserAddress> Addresses { get; set; } = new List<UserAddress>();
 }
