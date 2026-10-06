@@ -17,4 +17,4 @@ public record CartItemResponseDto(int ProductId, int Quantity, bool Available,
 public record CartResponseDto(int Id, int? SelectedAddressId,
     AddressResponseDto? SelectedAddress, IReadOnlyList<CartItemResponseDto> Items);
 public record OrderDeliveryAddressDto(string RecipientName, string AddressLine1,
-    string? AddressLine2, string City, string State, string PostalCode, string CountryCode);
+    string? AddressLine2, string City, string State, string PostalCode, string CountryCode, string? PhoneNumber = null);

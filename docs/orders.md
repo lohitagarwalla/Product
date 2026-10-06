@@ -9,6 +9,10 @@ shipping-provider integration, and frontend pages are not included.
 see [Saved carts and checkout](carts.md). Order creation removes only matching
 product IDs from the saved cart, atomically. Existing orders may have a null
 deliveryAddress; new orders require and save an address snapshot.
+The snapshot includes optional phoneNumber, normalized to +91 for Indian mobiles.
+It is independent of the account phone and remains unchanged after saved-address edits.
+Apply AddPhoneNumbersToAddresses to add nullable phone columns for saved addresses
+and order snapshots; existing records retain null.
 
 ## Database and setup
 

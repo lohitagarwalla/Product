@@ -18,6 +18,7 @@ Ownership comes from the token, not the request body. Another user's address ret
 {
   "label": "Home",
   "recipientName": "Lohit",
+  "phoneNumber": "9876543210",
   "addressLine1": "12 Main Road",
   "addressLine2": "Apartment 4",
   "city": "Bengaluru",
@@ -28,7 +29,12 @@ Ownership comes from the token, not the request body. Another user's address ret
 }
 ```
 
-`label` and `addressLine2` are optional. Other address details are required.
+`label`, `addressLine2`, and `phoneNumber` are optional. Other address details are required.
+Phone numbers accept 10 ASCII digits starting with 6–9, optionally prefixed with +91.
+Outer whitespace is trimmed; empty/blank numbers become null. Responses return the
+normalized +91 format. Only Indian mobile numbers are supported, regardless of address
+country. The address phone is independent of the account phone and is not automatically
+filled from it. Updates may clear it with null, blank, or an omitted phoneNumber.
 `countryCode` defaults to IN if omitted, accepts two ASCII letters, and is stored uppercase.
 For IN, the postal code must contain six ASCII digits and cannot start with zero.
 Other countries accept a nonblank postal code of up to 20 characters; country-specific
@@ -39,7 +45,9 @@ The first address becomes default regardless of `makeDefault`. Additional addres
 become default only when `makeDefault` is true or the default endpoint is called.
 An ordinary update cannot change default status. Deleting a default promotes the oldest
 remaining address (CreatedAt, then Id); deleting the last address leaves no default.
-Deletion is permanent. Addresses are not yet connected to checkout or existing orders.
+Deletion is permanent. Saved addresses can be selected in a cart. Checkout uses the
+submitted deliveryAddress snapshot, including its phone, rather than automatically
+copying the selected address. Existing order snapshots are unaffected by address edits.
 
 ## Update, select default, and delete
 

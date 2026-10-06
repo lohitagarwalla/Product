@@ -25,6 +25,50 @@ public class AddressEndpointsTests(AddressWebApplicationFactory factory)
     private const string Url = "/api/profile/addresses";
 
     [Theory]
+    [InlineData("9876543210", "+919876543210")]
+    [InlineData("  +919876543210  ", "+919876543210")]
+    [InlineData(null, null)]
+    [InlineData("   ", null)]
+    public async Task PhoneNumber_RoundTrips_AndCanBeUpdatedAndCleared(string? input, string? expected)
+    {
+        using var user = await CreateUserAsync();
+        var dto = CreateAddress(); dto.PhoneNumber = input;
+        var response = await user.PostAsJsonAsync(Url, dto);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var address = (await response.Content.ReadFromJsonAsync<AddressResponseDto>())!;
+        Assert.Equal(expected, address.PhoneNumber);
+        Assert.Equal(expected, (await user.GetFromJsonAsync<AddressResponseDto>($"{Url}/{address.Id}"))!.PhoneNumber);
+        Assert.Equal(expected, Assert.Single((await user.GetFromJsonAsync<List<AddressResponseDto>>(Url))!).PhoneNumber);
+        var update = Update(address); update.PhoneNumber = "8765432109";
+        response = await user.PutAsJsonAsync($"{Url}/{address.Id}", update);
+        response.EnsureSuccessStatusCode();
+        address = (await response.Content.ReadFromJsonAsync<AddressResponseDto>())!;
+        Assert.Equal("+918765432109", address.PhoneNumber);
+        update = Update(address); update.PhoneNumber = "";
+        response = await user.PutAsJsonAsync($"{Url}/{address.Id}", update);
+        response.EnsureSuccessStatusCode();
+        Assert.Null((await response.Content.ReadFromJsonAsync<AddressResponseDto>())!.PhoneNumber);
+    }
+
+    [Theory]
+    [InlineData("1234567890")]
+    [InlineData("987654321")]
+    [InlineData("+449876543210")]
+    [InlineData("98765 43210")]
+    [InlineData("abcdefghij")]
+    [InlineData("+919876543210000000000000000000000000")]
+    public async Task PhoneNumber_InvalidCreateAndUpdate_Return400(string input)
+    {
+        using var user = await CreateUserAsync();
+        var dto = CreateAddress(); dto.PhoneNumber = input;
+        Assert.Equal(HttpStatusCode.BadRequest, (await user.PostAsJsonAsync(Url, dto)).StatusCode);
+        var address = await AddAsync(user);
+        var update = Update(address); update.PhoneNumber = input;
+        Assert.Equal(HttpStatusCode.BadRequest, (await user.PutAsJsonAsync($"{Url}/{address.Id}", update)).StatusCode);
+        Assert.Null((await user.GetFromJsonAsync<AddressResponseDto>($"{Url}/{address.Id}"))!.PhoneNumber);
+    }
+
+    [Theory]
     [InlineData("GET", "")]
     [InlineData("GET", "/1")]
     [InlineData("POST", "")]

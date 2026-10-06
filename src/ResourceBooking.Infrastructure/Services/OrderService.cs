@@ -33,6 +33,7 @@ public class OrderService(ApplicationDbContext db) : IOrderService
         var address = dto.DeliveryAddress;
         var deliveryAddress = new OrderDeliveryAddress
         {
+            PhoneNumber = AddressPhoneNumber.Normalize(address.PhoneNumber),
             RecipientName = address.RecipientName.Trim(), AddressLine1 = address.AddressLine1.Trim(),
             AddressLine2 = string.IsNullOrWhiteSpace(address.AddressLine2) ? null : address.AddressLine2.Trim(),
             City = address.City.Trim(), State = address.State.Trim(), PostalCode = address.PostalCode.Trim(),
@@ -42,7 +43,7 @@ public class OrderService(ApplicationDbContext db) : IOrderService
         var canonicalRequest = JsonSerializer.Serialize(new
         {
             Items = dto.Items.OrderBy(i => i.ProductId).Select(i => new { i.ProductId, i.Quantity }),
-            DeliveryAddress = deliveryAddress
+            DeliveryAddress = CanonicalDeliveryAddress(deliveryAddress)
         });
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalRequest)));
         var existing = await FindRequestAsync(userId, dto.RequestId, ct);
@@ -218,7 +219,24 @@ public class OrderService(ApplicationDbContext db) : IOrderService
             order.CancelledByUserId is { } actorId ? firstNames.GetValueOrDefault(actorId) : null,
             order.DeliveryAddress is { } address ? new OrderDeliveryAddressDto(address.RecipientName,
                 address.AddressLine1, address.AddressLine2, address.City, address.State,
-                address.PostalCode, address.CountryCode) : null);
+                address.PostalCode, address.CountryCode, address.PhoneNumber) : null);
+    }
+
+    private static Dictionary<string, object?> CanonicalDeliveryAddress(OrderDeliveryAddress address)
+    {
+        // Keep the pre-phone property order and omit absent phones so existing hashes still replay.
+        var result = new Dictionary<string, object?>
+        {
+            [nameof(address.RecipientName)] = address.RecipientName,
+            [nameof(address.AddressLine1)] = address.AddressLine1,
+            [nameof(address.AddressLine2)] = address.AddressLine2,
+            [nameof(address.City)] = address.City,
+            [nameof(address.State)] = address.State,
+            [nameof(address.PostalCode)] = address.PostalCode,
+            [nameof(address.CountryCode)] = address.CountryCode
+        };
+        if (address.PhoneNumber is not null) result[nameof(address.PhoneNumber)] = address.PhoneNumber;
+        return result;
     }
 
     private static DateTime Utc(DateTime value) => DateTime.SpecifyKind(value, DateTimeKind.Utc);

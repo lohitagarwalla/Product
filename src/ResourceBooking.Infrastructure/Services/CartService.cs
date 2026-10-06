@@ -92,7 +92,7 @@ public class CartService(ApplicationDbContext db) : ICartService
         var address = a is null ? null : new AddressResponseDto(a.Id, a.Label, a.RecipientName,
             a.AddressLine1, a.AddressLine2, a.City, a.State, a.PostalCode, a.CountryCode, a.IsDefault,
             a.RowVersion, DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc),
-            a.UpdatedAt.HasValue ? DateTime.SpecifyKind(a.UpdatedAt.Value, DateTimeKind.Utc) : null);
+            a.UpdatedAt.HasValue ? DateTime.SpecifyKind(a.UpdatedAt.Value, DateTimeKind.Utc) : null, a.PhoneNumber);
         return new(cart.Id, cart.SelectedAddressId, address,
             cart.Items.OrderBy(i => i.ProductId).Select(i =>
             {

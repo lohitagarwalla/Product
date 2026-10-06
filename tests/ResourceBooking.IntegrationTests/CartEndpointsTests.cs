@@ -44,6 +44,71 @@ public class CartEndpointsTests(CartWebApplicationFactory factory) : CartContrac
 
 public abstract class CartContractTests(WebApplicationFactory<Program> factory)
 {
+    [Fact]
+    public async Task PhoneNumber_CartAndOrderSnapshots_AndNormalizedRetries()
+    {
+        using var user = await UserAsync(); using var admin = await UserAsync(true);
+        var product = await ProductAsync(admin);
+        var response = await user.PostAsJsonAsync("/api/profile/addresses", new AddressCreateDto
+        {
+            RecipientName = "Recipient", AddressLine1 = "1 Main Street", City = "Bengaluru",
+            State = "Karnataka", PostalCode = "560001", PhoneNumber = "9876543210"
+        });
+        response.EnsureSuccessStatusCode();
+        var address = (await response.Content.ReadFromJsonAsync<AddressResponseDto>())!;
+        var cart = await SelectAsync(user, await CartAsync(user), address.Id);
+        Assert.Equal("+919876543210", cart.SelectedAddress!.PhoneNumber);
+        Assert.Equal("+919876543210", (await CartAsync(user)).SelectedAddress!.PhoneNumber);
+        var request = Request(product.Id); request.DeliveryAddress.PhoneNumber = " 9876543210 ";
+        response = await user.PostAsJsonAsync("/api/orders", request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var order = (await response.Content.ReadFromJsonAsync<OrderResponseDto>())!;
+        Assert.Equal("+919876543210", order.DeliveryAddress!.PhoneNumber);
+        response = await user.PutAsJsonAsync($"/api/profile/addresses/{address.Id}", new AddressUpdateDto
+        {
+            RecipientName = address.RecipientName, AddressLine1 = address.AddressLine1, City = address.City,
+            State = address.State, PostalCode = address.PostalCode, CountryCode = address.CountryCode,
+            RowVersion = address.RowVersion, PhoneNumber = "8765432109"
+        });
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("+918765432109", (await CartAsync(user)).SelectedAddress!.PhoneNumber);
+        Assert.Equal("+919876543210", (await user.GetFromJsonAsync<OrderResponseDto>($"/api/orders/{order.Id}"))!.DeliveryAddress!.PhoneNumber);
+        request.DeliveryAddress.PhoneNumber = "+919876543210";
+        Assert.Equal(HttpStatusCode.OK, (await user.PostAsJsonAsync("/api/orders", request)).StatusCode);
+        request.DeliveryAddress.PhoneNumber = "8765432109";
+        Assert.Equal(HttpStatusCode.Conflict, (await user.PostAsJsonAsync("/api/orders", request)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Checkout_PrePhoneHash_StillReplaysWithoutPhone()
+    {
+        using var user = await UserAsync(); using var admin = await UserAsync(true);
+        var product = await ProductAsync(admin); var request = Request(product.Id);
+        var response = await user.PostAsJsonAsync("/api/orders", request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var order = (await response.Content.ReadFromJsonAsync<OrderResponseDto>())!;
+        // Reconstruct the serialization used before PhoneNumber existed, independently of the service.
+        var a = request.DeliveryAddress;
+        var legacyJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Items = request.Items.OrderBy(i => i.ProductId).Select(i => new { i.ProductId, i.Quantity }),
+            DeliveryAddress = new { a.RecipientName, a.AddressLine1, a.AddressLine2, a.City, a.State, a.PostalCode, a.CountryCode }
+        });
+        var legacyHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(legacyJson)));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var saved = await db.Orders.SingleAsync(o => o.Id == order.Id);
+            Assert.Equal(legacyHash, saved.RequestHash);
+            saved.RequestHash = legacyHash;
+            await db.SaveChangesAsync();
+        }
+        request.DeliveryAddress.PhoneNumber = "   ";
+        Assert.Equal(HttpStatusCode.OK, (await user.PostAsJsonAsync("/api/orders", request)).StatusCode);
+        request.DeliveryAddress.PhoneNumber = "9876543210";
+        Assert.Equal(HttpStatusCode.Conflict, (await user.PostAsJsonAsync("/api/orders", request)).StatusCode);
+    }
+
     [Theory]
     [InlineData("GET", "")]
     [InlineData("PUT", "/items/1")]
@@ -172,6 +237,7 @@ public abstract class CartContractTests(WebApplicationFactory<Program> factory)
     [InlineData("empty-items")] [InlineData("duplicate-product")] [InlineData("bad-address")]
     [InlineData("bad-postal")] [InlineData("bad-country")] [InlineData("long-address")]
     [InlineData("bad-quantity")] [InlineData("bad-product")] [InlineData("empty-request-id")]
+    [InlineData("bad-phone")]
     public async Task Checkout_InvalidRequest_DoesNotCreateOrderOrRemoveItems(string invalid)
     {
         using var user = await UserAsync(); using var admin = await UserAsync(true);
@@ -186,6 +252,7 @@ public abstract class CartContractTests(WebApplicationFactory<Program> factory)
             case "empty-items": request.Items.Clear(); break;
             case "duplicate-product": request.Items.Add(new() { ProductId = product.Id, Quantity = 1 }); break;
             case "bad-address": request.DeliveryAddress.City = " "; break;
+            case "bad-phone": request.DeliveryAddress.PhoneNumber = "+449876543210"; break;
             case "bad-postal": request.DeliveryAddress.PostalCode = "000000"; break;
             case "bad-country": request.DeliveryAddress.CountryCode = "IND"; break;
             case "long-address": request.DeliveryAddress.AddressLine1 = new string('x', 201); break;

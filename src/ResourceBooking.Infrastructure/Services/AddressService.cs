@@ -137,6 +137,7 @@ public class AddressService(ApplicationDbContext db) : IAddressService
     {
         address.Label = Optional(dto.Label);
         address.RecipientName = dto.RecipientName.Trim();
+        address.PhoneNumber = AddressPhoneNumber.Normalize(dto.PhoneNumber);
         address.AddressLine1 = dto.AddressLine1.Trim();
         address.AddressLine2 = Optional(dto.AddressLine2);
         address.City = dto.City.Trim();
@@ -150,5 +151,5 @@ public class AddressService(ApplicationDbContext db) : IAddressService
     private static AddressResponseDto ToDto(UserAddress a) => new(a.Id, a.Label, a.RecipientName,
         a.AddressLine1, a.AddressLine2, a.City, a.State, a.PostalCode, a.CountryCode, a.IsDefault,
         a.RowVersion, DateTime.SpecifyKind(a.CreatedAt, DateTimeKind.Utc),
-        a.UpdatedAt.HasValue ? DateTime.SpecifyKind(a.UpdatedAt.Value, DateTimeKind.Utc) : null);
+        a.UpdatedAt.HasValue ? DateTime.SpecifyKind(a.UpdatedAt.Value, DateTimeKind.Utc) : null, a.PhoneNumber);
 }

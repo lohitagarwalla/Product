@@ -30,6 +30,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.OwnsOne(o => o.DeliveryAddress, address =>
         {
             address.Property(a => a.RecipientName).HasMaxLength(100).IsRequired();
+            address.Property(a => a.PhoneNumber).HasMaxLength(13);
             address.Property(a => a.AddressLine1).HasMaxLength(200).IsRequired();
             address.Property(a => a.AddressLine2).HasMaxLength(200);
             address.Property(a => a.City).HasMaxLength(100).IsRequired();

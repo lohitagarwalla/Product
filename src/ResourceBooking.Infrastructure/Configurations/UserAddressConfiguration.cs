@@ -15,6 +15,7 @@ public class UserAddressConfiguration : IEntityTypeConfiguration<UserAddress>
             .HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(a => a.Label).HasMaxLength(50);
         builder.Property(a => a.RecipientName).HasMaxLength(100).IsRequired();
+        builder.Property(a => a.PhoneNumber).HasMaxLength(13);
         builder.Property(a => a.AddressLine1).HasMaxLength(200).IsRequired();
         builder.Property(a => a.AddressLine2).HasMaxLength(200);
         builder.Property(a => a.City).HasMaxLength(100).IsRequired();
