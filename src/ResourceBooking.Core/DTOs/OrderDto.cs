@@ -7,6 +7,9 @@ public class OrderCreateDto : IValidatableObject
 {
     public Guid RequestId { get; set; }
 
+    [Required]
+    public DeliveryAddressWriteDto DeliveryAddress { get; set; } = null!;
+
     [Required, MinLength(1), MaxLength(100)]
     public List<OrderItemCreateDto> Items { get; set; } = [];
 
@@ -18,6 +21,10 @@ public class OrderCreateDto : IValidatableObject
             Items.Select(i => i.ProductId).Distinct().Count() != Items.Count))
             yield return new ValidationResult("Supply each product exactly once; items cannot be null.", [nameof(Items)]);
     }
+}
+
+public class DeliveryAddressWriteDto : AddressWriteDto
+{
 }
 
 public class OrderItemCreateDto
@@ -62,7 +69,8 @@ public record OrderResponseDto(int Id, string OrderNumber, string UserId, OrderS
     string Currency, decimal TotalAmount, DateTime CreatedAt, DateTime? ShippedAt, DateTime? DeliveredAt,
     DateTime? CancelledAt, string? CancelledByUserId, string? CancellationReason, byte[] RowVersion,
     IReadOnlyList<OrderItemResponseDto> Items, IReadOnlyList<OrderStatusHistoryResponseDto> StatusHistory,
-    string? UserFirstName = null, string? CancelledByFirstName = null);
+    string? UserFirstName = null, string? CancelledByFirstName = null,
+    OrderDeliveryAddressDto? DeliveryAddress = null);
 public record OrderSummaryDto(int Id, string OrderNumber, string UserId, OrderStatus Status,
     string Currency, decimal TotalAmount, int TotalQuantity, DateTime CreatedAt, string? UserFirstName = null);
 public record OrderPageDto(IReadOnlyList<OrderSummaryDto> Items, int TotalCount, int Page, int PageSize);

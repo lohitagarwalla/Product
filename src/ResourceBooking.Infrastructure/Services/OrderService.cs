@@ -1,7 +1,7 @@
-using System.Data;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using ResourceBooking.Core.DTOs;
 using ResourceBooking.Core.Entities;
@@ -17,23 +17,39 @@ public class OrderService(ApplicationDbContext db) : IOrderService
     private const decimal MaxAmount = 9999999999999999.99m;
     private IQueryable<Order> Details => db.Orders.Include(o => o.Items).Include(o => o.StatusHistory);
 
-    public async Task<OrderCreateResult> CreateAsync(OrderCreateDto dto, string userId, CancellationToken ct)
+    public Task<OrderCreateResult> CreateAsync(OrderCreateDto dto, string userId, CancellationToken ct) =>
+        UserCartLock.RunAsync(db, userId, () => CreateCoreAsync(dto, userId, ct), ct);
+
+    private async Task<OrderCreateResult> CreateCoreAsync(OrderCreateDto dto, string userId, CancellationToken ct)
     {
         if (dto.RequestId == Guid.Empty || dto.Items is null || dto.Items.Count is < 1 or > 100 ||
             dto.Items.Any(i => i is null || i.ProductId <= 0 || i.Quantity is < 1 or > 1000) ||
             dto.Items.Select(i => i.ProductId).Distinct().Count() != dto.Items.Count)
             throw new InvalidOperationException("Supply a request ID and 1-100 distinct products with quantities between 1 and 1000.");
 
-        var canonicalItems = string.Join(";", dto.Items.OrderBy(i => i.ProductId)
-            .Select(i => FormattableString.Invariant($"{i.ProductId}:{i.Quantity}")));
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalItems)));
+        if (dto.DeliveryAddress is null || !Validator.TryValidateObject(dto.DeliveryAddress,
+            new ValidationContext(dto.DeliveryAddress), new List<ValidationResult>(), true))
+            throw new InvalidOperationException("Supply valid delivery address details.");
+        var address = dto.DeliveryAddress;
+        var deliveryAddress = new OrderDeliveryAddress
+        {
+            RecipientName = address.RecipientName.Trim(), AddressLine1 = address.AddressLine1.Trim(),
+            AddressLine2 = string.IsNullOrWhiteSpace(address.AddressLine2) ? null : address.AddressLine2.Trim(),
+            City = address.City.Trim(), State = address.State.Trim(), PostalCode = address.PostalCode.Trim(),
+            CountryCode = address.CountryCode.Trim().ToUpperInvariant()
+        };
+        // Structured, sorted inputs make retry identity independent of item order.
+        var canonicalRequest = JsonSerializer.Serialize(new
+        {
+            Items = dto.Items.OrderBy(i => i.ProductId).Select(i => new { i.ProductId, i.Quantity }),
+            DeliveryAddress = deliveryAddress
+        });
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalRequest)));
         var existing = await FindRequestAsync(userId, dto.RequestId, ct);
         if (existing is not null) return await ReplayAsync(existing, hash, ct);
 
         // Hold shared locks on catalog rows until the snapshots are committed. A concurrent
         // price/publication/delete edit must complete either before or after order creation.
-        await using var transaction = db.Database.IsRelational()
-            ? await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct) : null;
         var ids = dto.Items.Select(i => i.ProductId).ToArray();
         var products = await db.Products.AsNoTracking().Where(p => ids.Contains(p.Id) && p.IsPublished)
             .ToDictionaryAsync(p => p.Id, ct);
@@ -46,7 +62,7 @@ public class OrderService(ApplicationDbContext db) : IOrderService
         {
             OrderNumber = $"ORD-{Guid.NewGuid():N}".ToUpperInvariant(), UserId = userId,
             RequestId = dto.RequestId, RequestHash = hash,
-            Currency = products.Values.First().Currency.ToUpperInvariant()
+            Currency = products.Values.First().Currency.ToUpperInvariant(), DeliveryAddress = deliveryAddress
         };
         foreach (var item in dto.Items.OrderBy(i => i.ProductId))
         {
@@ -66,22 +82,18 @@ public class OrderService(ApplicationDbContext db) : IOrderService
             PreviousStatus = null, NewStatus = OrderStatus.Placed,
             ChangedByUserId = userId, ChangedAtUtc = DateTime.UtcNow
         });
+        // Checkout inputs come from the request. A saved cart is optional.
+        var cart = await db.Carts.Include(c => c.Items).SingleOrDefaultAsync(c => c.UserId == userId, ct);
+        if (cart is not null)
+        {
+            var purchased = cart.Items.Where(i => ids.Contains(i.ProductId)).ToList();
+            db.CartItems.RemoveRange(purchased);
+            foreach (var item in purchased) cart.Items.Remove(item);
+            if (purchased.Count > 0) db.Entry(cart).Property(c => c.UpdatedAt).IsModified = true;
+        }
         db.Orders.Add(order);
-        try
-        {
-            // Order, items, and initial history are one atomic write.
-            await db.SaveChangesAsync(ct);
-            if (transaction is not null) await transaction.CommitAsync(ct);
-        }
-        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
-        {
-            // The unique (UserId, RequestId) index also handles simultaneous retries.
-            if (transaction is not null) await transaction.RollbackAsync(ct);
-            db.ChangeTracker.Clear();
-            existing = await FindRequestAsync(userId, dto.RequestId, ct);
-            if (existing is null) throw;
-            return await ReplayAsync(existing, hash, ct);
-        }
+        // The outer transaction commits the order and purchased cart removals together.
+        await db.SaveChangesAsync(ct);
         return new(await ToDtoAsync(order, ct), false);
     }
 
@@ -174,7 +186,7 @@ public class OrderService(ApplicationDbContext db) : IOrderService
     private async Task<OrderCreateResult> ReplayAsync(Order existing, string hash, CancellationToken ct)
     {
         if (!string.Equals(existing.RequestHash, hash, StringComparison.Ordinal))
-            throw new OrderConflictException("This request ID was already used for different order items. Use a new request ID.");
+            throw new OrderConflictException("This request ID was already used for different checkout inputs. Use a new request ID.");
         return new(await ToDtoAsync(existing, ct), true);
     }
 
@@ -203,7 +215,10 @@ public class OrderService(ApplicationDbContext db) : IOrderService
                     h.ChangedByUserId, Utc(h.ChangedAtUtc), h.Reason,
                     firstNames.GetValueOrDefault(h.ChangedByUserId))).ToList(),
             firstNames.GetValueOrDefault(order.UserId),
-            order.CancelledByUserId is { } actorId ? firstNames.GetValueOrDefault(actorId) : null);
+            order.CancelledByUserId is { } actorId ? firstNames.GetValueOrDefault(actorId) : null,
+            order.DeliveryAddress is { } address ? new OrderDeliveryAddressDto(address.RecipientName,
+                address.AddressLine1, address.AddressLine2, address.City, address.State,
+                address.PostalCode, address.CountryCode) : null);
     }
 
     private static DateTime Utc(DateTime value) => DateTime.SpecifyKind(value, DateTimeKind.Utc);

@@ -27,6 +27,16 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.CancelledByUserId).HasMaxLength(450);
         builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(o => o.CancelledByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(o => o.RowVersion).IsRowVersion();
+        builder.OwnsOne(o => o.DeliveryAddress, address =>
+        {
+            address.Property(a => a.RecipientName).HasMaxLength(100).IsRequired();
+            address.Property(a => a.AddressLine1).HasMaxLength(200).IsRequired();
+            address.Property(a => a.AddressLine2).HasMaxLength(200);
+            address.Property(a => a.City).HasMaxLength(100).IsRequired();
+            address.Property(a => a.State).HasMaxLength(100).IsRequired();
+            address.Property(a => a.PostalCode).HasMaxLength(20).IsRequired();
+            address.Property(a => a.CountryCode).HasMaxLength(2).IsRequired();
+        });
         builder.HasIndex(o => new { o.UserId, o.CreatedAt, o.Id });
         builder.HasIndex(o => new { o.UserId, o.Status, o.CreatedAt, o.Id });
         builder.HasIndex(o => new { o.Status, o.CreatedAt, o.Id });

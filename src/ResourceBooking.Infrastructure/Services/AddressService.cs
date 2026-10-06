@@ -62,6 +62,15 @@ public class AddressService(ApplicationDbContext db) : IAddressService
             var address = await FindOwnedAsync(id, userId, ct);
             CheckVersion(address, rowVersion);
             var wasDefault = address.IsDefault;
+            var cart = await db.Carts.SingleOrDefaultAsync(c => c.UserId == userId && c.SelectedAddressId == id, ct);
+            if (cart is not null)
+            {
+                cart.SelectedAddressId = null;
+                cart.SelectedAddress = null;
+                db.Entry(cart).Property(c => c.UpdatedAt).IsModified = true;
+                // Clear the restrictive FK before deleting the address; both writes share a transaction.
+                await db.SaveChangesAsync(ct);
+            }
             db.UserAddresses.Remove(address);
             await db.SaveChangesAsync(ct);
             if (wasDefault)

@@ -5,6 +5,11 @@ This backend supports order creation, user/admin searches, shipping, delivery,
 cancellation, and an append-only status history. Payments, refunds, stock,
 shipping-provider integration, and frontend pages are not included.
 
+`POST /api/orders` accepts submitted items and required delivery-address details;
+see [Saved carts and checkout](carts.md). Order creation removes only matching
+product IDs from the saved cart, atomically. Existing orders may have a null
+deliveryAddress; new orders require and save an address snapshot.
+
 ## Database and setup
 
 `AddOrdersAndStatusHistory` adds `Orders`, `OrderItems`, and
@@ -60,7 +65,11 @@ caching. Another user's order returns 404 unless the caller is an admin.
   "items": [
     { "productId": 1, "quantity": 2 },
     { "productId": 2, "quantity": 1 }
-  ]
+  ],
+  "deliveryAddress": {
+    "recipientName": "Lohit", "addressLine1": "House 10", "addressLine2": null,
+    "city": "Hyderabad", "state": "Telangana", "postalCode": "500001", "countryCode": "IN"
+  }
 }
 ```
 
@@ -77,9 +86,9 @@ caching. Another user's order returns 404 unless the caller is an admin.
 - Current published product images may be included as `imageUrl`. This is not
   an image snapshot: if absent or the URL no longer works, show a placeholder.
 - The unique `(UserId, RequestId)` index prevents concurrent duplicate orders.
-  Reusing the key with the same products/quantities returns the existing order
+  Reusing the key with the same products/quantities and normalized address returns the existing order
   in its current state, even if catalog data changed. Item order is irrelevant.
-  Reusing it with different products/quantities returns 409.
+  Reusing it with different products/quantities or address details returns 409.
 - Creation uses a transaction with repeatable-read catalog access, so catalog
   edits cannot invalidate the product snapshots between validation and commit.
 

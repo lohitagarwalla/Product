@@ -17,6 +17,7 @@ public class Order : BaseEntity
     public string? CancelledByUserId { get; set; }
     public string? CancellationReason { get; set; }
     public byte[] RowVersion { get; set; } = [];
+    public OrderDeliveryAddress? DeliveryAddress { get; set; }
     public ICollection<OrderItem> Items { get; set; } = new List<OrderItem>();
     public ICollection<OrderStatusHistory> StatusHistory { get; set; } = new List<OrderStatusHistory>();
 }
