@@ -7,6 +7,7 @@ public interface IAccountService
 {
     Task<AuthResponseDto> RegisterAsync(RegisterDto dto);
     Task<AuthResponseDto> LoginAsync(LoginDto dto);
-    Task LogoutAsync();
+    Task<AuthResponseDto> RefreshAsync(string? refreshToken, CancellationToken ct = default);
+    Task LogoutAsync(string? refreshToken, CancellationToken ct = default);
     Task<string> GenerateJwtTokenAsync(ApplicationUser user);
 }

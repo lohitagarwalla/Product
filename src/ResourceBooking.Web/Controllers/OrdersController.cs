@@ -1,3 +1,4 @@
+using ResourceBooking.Core.Constants;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -32,7 +33,7 @@ public class OrdersController(IOrderService orders) : ControllerBase
         return Ok(await orders.ListAsync(query, UserId, false, ct));
     }
 
-    [HttpGet("manage"), Authorize(Roles = "Admin")]
+    [HttpGet("manage"), Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<OrderPageDto>> Manage([FromQuery] OrderQueryDto query, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(UserId)) return Unauthorized();
@@ -43,18 +44,18 @@ public class OrdersController(IOrderService orders) : ControllerBase
     public async Task<ActionResult<OrderResponseDto>> Get(int id, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(UserId)) return Unauthorized();
-        return Ok(await orders.GetAsync(id, UserId, User.IsInRole("Admin"), ct));
+        return Ok(await orders.GetAsync(id, UserId, User.IsInRole(Roles.Admin), ct));
     }
 
     [HttpPost("{id:int}/cancel")]
     public Task<ActionResult<OrderResponseDto>> Cancel(int id, OrderCancelDto dto, CancellationToken ct) =>
         ChangeStatus(id, OrderStatus.Cancelled, dto, dto.Reason, ct);
 
-    [HttpPost("{id:int}/ship"), Authorize(Roles = "Admin")]
+    [HttpPost("{id:int}/ship"), Authorize(Roles = Roles.Admin)]
     public Task<ActionResult<OrderResponseDto>> Ship(int id, OrderStatusChangeDto dto, CancellationToken ct) =>
         ChangeStatus(id, OrderStatus.Shipped, dto, null, ct);
 
-    [HttpPost("{id:int}/deliver"), Authorize(Roles = "Admin")]
+    [HttpPost("{id:int}/deliver"), Authorize(Roles = Roles.Admin)]
     public Task<ActionResult<OrderResponseDto>> Deliver(int id, OrderStatusChangeDto dto, CancellationToken ct) =>
         ChangeStatus(id, OrderStatus.Delivered, dto, null, ct);
 
@@ -62,6 +63,6 @@ public class OrdersController(IOrderService orders) : ControllerBase
         OrderStatusChangeDto dto, string? reason, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(UserId)) return Unauthorized();
-        return Ok(await orders.ChangeStatusAsync(id, target, dto.RowVersion, reason, UserId, User.IsInRole("Admin"), ct));
+        return Ok(await orders.ChangeStatusAsync(id, target, dto.RowVersion, reason, UserId, User.IsInRole(Roles.Admin), ct));
     }
 }

@@ -1,3 +1,4 @@
+using ResourceBooking.Core.Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
@@ -20,7 +21,7 @@ public class ImagesController(IImageService images) : ControllerBase
     private async Task<IActionResult> Read(int id, bool download, CancellationToken ct)
     {
         // A draft can only be viewed by an authenticated administrator.
-        var image = await images.OpenAsync(id, User.IsInRole("Admin"), ct);
+        var image = await images.OpenAsync(id, User.IsInRole(Roles.Admin), ct);
         if (image is null) return NotFound();
         Response.Headers.CacheControl = "no-store";
         Response.Headers["X-Content-Type-Options"] = "nosniff";

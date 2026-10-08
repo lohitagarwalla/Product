@@ -1,3 +1,4 @@
+using ResourceBooking.Core.Constants;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +11,7 @@ namespace ResourceBooking.Web.Controllers;
 
 [ApiController]
 [Route("api/products")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = Roles.Admin)]
 [OutputCache(NoStore = true)]
 public class ProductsController(IProductService products) : ControllerBase
 {
@@ -26,7 +27,7 @@ public class ProductsController(IProductService products) : ControllerBase
     public async Task<ActionResult<ProductResponseDto>> Get(int id, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var product = await products.GetAsync(id, User.IsInRole("Admin"), ct);
+        var product = await products.GetAsync(id, User.IsInRole(Roles.Admin), ct);
         return product is null ? NotFound() : Ok(product);
     }
 

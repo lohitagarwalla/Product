@@ -1,9 +1,11 @@
+using ResourceBooking.Core.Constants;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using ResourceBooking.Core.Entities;
+using ResourceBooking.Core.DTOs;
 using ResourceBooking.Core.Interfaces;
 using ResourceBooking.Infrastructure.Data;
 using ResourceBooking.Infrastructure.Repositories;
@@ -93,6 +95,17 @@ builder.Services.AddOptions<ImageStorageOptions>()
 
 // 1. Add Custom Account Service
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<AuthRequestFilter>();
+builder.Services.AddOptions<AuthSessionOptions>()
+    .Bind(builder.Configuration.GetSection(AuthSessionOptions.SectionName))
+    .Validate(o => o.AccessTokenMinutes is > 0 and <= 60, "Access-token lifetime must be 1-60 minutes.")
+    .Validate(o => o.RefreshSessionDays is > 0 and <= 90, "Refresh-session lifetime must be 1-90 days.")
+    .Validate(o => o.AllowedOrigins.Length > 0 && o.AllowedOrigins.All(origin =>
+        Uri.TryCreate(origin, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == "https" || uri.Scheme == "http") &&
+        origin == uri.GetLeftPart(UriPartial.Authority)), "Allowed origins must be exact HTTP(S) origins without paths or trailing slashes.")
+    .ValidateOnStart();
 
 // (we are not building mvc, so not using cookies for authentication.)
 // 2. Configure Cookie Authentication for MVC
@@ -137,7 +150,7 @@ builder.Services
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("RequireAdminOnly", policy =>
-        policy.RequireRole("Admin"));
+        policy.RequireRole(Roles.Admin));
 
     options.AddPolicy("RequireITDepartment", policy =>
         policy.RequireClaim("Department", "IT Ops", "IT Infrastructure"));
@@ -152,13 +165,16 @@ builder.Services.AddControllers(options =>
     options.Filters.Add<LogExecutionTimeFilter>();
 });
 
+var authOrigins = builder.Configuration.GetSection("AuthSession:AllowedOrigins").Get<string[]>()
+    ?? new AuthSessionOptions().AllowedOrigins;
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("ReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins(authOrigins)
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
@@ -190,7 +206,7 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// Seed roles, admin user, and initial catalog data
+// Seed roles and initial catalog data, plus the demo admin in Development
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -200,7 +216,11 @@ using (var scope = app.Services.CreateScope())
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 
-        await DbInitializer.SeedAsync(context, userManager, roleManager);
+        await DbInitializer.SeedAsync(
+            context,
+            userManager,
+            roleManager,
+            seedDemoAdmin: app.Environment.IsDevelopment());
     }
     catch (Exception ex)
     {

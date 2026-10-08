@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using ResourceBooking.Core.Constants;
+using System.Collections;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
@@ -53,7 +54,7 @@ public class ResourcesController : ControllerBase
     /// Create a new resource and invalidate the 'resources' cache tag.
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     [ProducesResponseType(StatusCodes.Status201Created, Type = typeof(ResourceResponseDto))]
     public async Task<ActionResult<ResourceResponseDto>> Create(
         [FromBody] ResourceCreateDto dto,
@@ -93,7 +94,7 @@ public class ResourcesController : ControllerBase
     /// Soft delete resource and invalidate cache.
     /// </summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> SoftDelete(int id, CancellationToken cancellationToken)
     {
         var resource = await _resourceRepository.GetByIdAsync(id);

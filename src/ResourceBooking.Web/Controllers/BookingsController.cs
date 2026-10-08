@@ -1,4 +1,5 @@
-﻿using System.Security.Claims;
+﻿using ResourceBooking.Core.Constants;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -80,7 +81,7 @@ public class BookingsController : ControllerBase
             return Unauthorized();
         }
 
-        bool isAdmin = User.IsInRole("Admin");
+        bool isAdmin = User.IsInRole(Roles.Admin);
 
         try
         {
@@ -103,7 +104,7 @@ public class BookingsController : ControllerBase
     /// Fetch all pending bookings requiring approval (Admin Only).
     /// </summary>
     [HttpGet("pending")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<BookingResponseDto>))]
     public async Task<ActionResult<IEnumerable<BookingResponseDto>>> GetPendingBookings()
     {
@@ -115,7 +116,7 @@ public class BookingsController : ControllerBase
     /// Confirm and approve a pending booking (Admin Only).
     /// </summary>
     [HttpPost("{id:int}/approve")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ApproveBooking(int id)
@@ -130,7 +131,7 @@ public class BookingsController : ControllerBase
     /// Reject a pending booking request with reason (Admin Only).
     /// </summary>
     [HttpPost("{id:int}/reject")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
