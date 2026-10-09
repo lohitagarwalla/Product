@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using ResourceBooking.Core.DTOs;
 using ResourceBooking.Core.Entities;
 using ResourceBooking.Core.Enums;
@@ -41,6 +42,9 @@ public class OrderWebApplicationFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseTestJwt();
+        // Keep business-test setup logins independent of production traffic limits.
+        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+            new Dictionary<string, string?> { ["RateLimiting:Login:PermitLimit"] = "10000" }));
         builder.ConfigureLogging(logging => logging.ClearProviders());
         builder.ConfigureServices(services =>
         {

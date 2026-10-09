@@ -14,9 +14,20 @@ using ResourceBooking.Infrastructure.Services;
 using ResourceBooking.Infrastructure.Storage;
 using ResourceBooking.Web.Filters;
 using ResourceBooking.Web.Middleware;
+using ResourceBooking.Web.RateLimiting;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddOptions<LoginRateLimitOptions>()
+    .Bind(builder.Configuration.GetSection(LoginRateLimitOptions.SectionName))
+    .Validate(o => o.PermitLimit > 0, "Login rate limit must allow at least one request.")
+    .Validate(o => o.WindowSeconds is >= 1 and <= 3600, "Login rate-limit window must be 1-3600 seconds.")
+    .Validate(o => o.SegmentsPerWindow > 0 && o.SegmentsPerWindow <= o.WindowSeconds,
+        "Login rate-limit segments must be positive and no greater than the window in seconds.")
+    .ValidateOnStart();
+builder.Services.AddRateLimiter(options =>
+    options.AddPolicy<string, LoginRateLimitPolicy>(LoginRateLimitPolicy.Name));
 
 // 1. Add Native .NET 10 OpenAPI Support
 builder.Services.AddOpenApi();
@@ -184,6 +195,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(authOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
+              .WithExposedHeaders("Retry-After")
               .AllowCredentials();
     });
 });
@@ -192,6 +204,7 @@ var app = builder.Build();
 
 // Resolve after host configuration is complete, but before any database initialization.
 _ = app.Services.GetRequiredService<IOptions<JwtSettings>>().Value;
+_ = app.Services.GetRequiredService<IOptions<LoginRateLimitOptions>>().Value;
 
 // 2. Add Exception Middleware as the VERY FIRST component in the HTTP pipeline
 app.UseMiddleware<GlobalExceptionMiddleware>();
@@ -248,6 +261,7 @@ app.UseStaticFiles();
 app.UseRouting();
 
 app.UseCors("ReactApp");
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

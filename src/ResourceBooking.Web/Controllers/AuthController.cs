@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using ResourceBooking.Web.RateLimiting;
 using ResourceBooking.Core.DTOs;
 using ResourceBooking.Core.Interfaces;
 using ResourceBooking.Web.Filters;
@@ -44,6 +46,8 @@ public class AuthController : ControllerBase
     /// Authenticate a user and receive a JWT Bearer token.
     /// </summary>
     [HttpPost("login")]
+    [EnableRateLimiting(LoginRateLimitPolicy.Name)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [Consumes("application/json")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AuthResponseDto))]
