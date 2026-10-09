@@ -75,7 +75,7 @@ dotnet run --project src/ResourceBooking.Web --configuration Release --no-build 
 
 The existing startup initializer also applies pending migrations when it can connect to SQL Server. A migration being generated or a build succeeding does not prove it was applied to your application database.
 
-The JWT signing key still uses the project's existing configuration and fallback behavior. Supply a private `JwtSettings:Secret` before deployment; signing-key hardening is a separate existing concern.
+The JWT signing key is required in every environment; there is no hardcoded fallback. See [JWT configuration](jwt-configuration.md) for local User Secrets, production configuration, and key replacement behavior.
 
 ## Verification
 

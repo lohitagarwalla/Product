@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using ResourceBooking.Core.Entities;
 using ResourceBooking.Core.DTOs;
@@ -119,8 +120,13 @@ builder.Services.AddOptions<AuthSessionOptions>()
 //});
 
 // 3. Configure JWT Bearer Authentication (for Web API / Bearer Token endpoints)
-var jwtSecret = builder.Configuration["JwtSettings:Secret"]
-    ?? "SuperSecretSecurityKeyThatIsAtLeast32BytesLongForHS256!";
+builder.Services.AddOptions<JwtSettings>()
+    .Bind(builder.Configuration.GetSection(JwtSettings.SectionName))
+    .Validate(o => !string.IsNullOrWhiteSpace(o.Secret) && Encoding.UTF8.GetByteCount(o.Secret) >= 32,
+        "JwtSettings:Secret is required and must contain at least 32 UTF-8 bytes. Configure a cryptographically random secret outside source control.")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.Issuer), "JwtSettings:Issuer must not be blank.")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.Audience), "JwtSettings:Audience must not be blank.")
+    .ValidateOnStart();
 
 builder.Services
     .AddAuthentication(options =>
@@ -131,17 +137,21 @@ builder.Services
         options.DefaultChallengeScheme =
             JwtBearerDefaults.AuthenticationScheme;
     })
-    .AddJwtBearer(options =>
+    .AddJwtBearer();
+
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IOptions<JwtSettings>>((options, settings) =>
     {
+        var jwt = settings.Value;
         options.SaveToken = true;
         options.RequireHttpsMetadata = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidateAudience = true,
-            ValidIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "ResourceBookingApi",
-            ValidAudience = builder.Configuration["JwtSettings:Audience"] ?? "ResourceBookingClients",
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+            ValidIssuer = jwt.Issuer,
+            ValidAudience = jwt.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Secret)),
             ClockSkew = TimeSpan.Zero
         };
     });
@@ -179,6 +189,9 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Resolve after host configuration is complete, but before any database initialization.
+_ = app.Services.GetRequiredService<IOptions<JwtSettings>>().Value;
 
 // 2. Add Exception Middleware as the VERY FIRST component in the HTTP pipeline
 app.UseMiddleware<GlobalExceptionMiddleware>();

@@ -40,6 +40,7 @@ public class OrderWebApplicationFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseTestJwt();
         builder.ConfigureLogging(logging => logging.ClearProviders());
         builder.ConfigureServices(services =>
         {

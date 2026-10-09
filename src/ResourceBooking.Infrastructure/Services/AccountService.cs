@@ -4,7 +4,6 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -22,20 +21,20 @@ public class AccountService : IAccountService
     // SignInManager is used for Identity-authentication-cookies. this is not required here. we will use jwt for authentication here.
     // Cookies are generally well suited to browser-based applications where the browser can automatically manage the authentication cookie. JWT bearer tokens are generally well suited to APIs consumed by SPAs, mobile clients, or other services, especially when token-based authentication across services is useful. Neither is inherently better; the choice depends on the client and architecture. (JWT is mostly used for api's) (and cookies are natural choise for browser-based applications)
     //private readonly SignInManager<ApplicationUser> _signInManager; 
-    private readonly IConfiguration _configuration;
+    private readonly JwtSettings _jwtSettings;
     private readonly ApplicationDbContext _db;
     private readonly AuthSessionOptions _sessionOptions;
     private readonly TimeProvider _clock;
 
     public AccountService(
         UserManager<ApplicationUser> userManager,
-        IConfiguration configuration,
+        IOptions<JwtSettings> jwtSettings,
         ApplicationDbContext db,
         IOptions<AuthSessionOptions> sessionOptions,
         TimeProvider clock)
     {
         _userManager = userManager;
-        _configuration = configuration;
+        _jwtSettings = jwtSettings.Value;
         _db = db;
         _sessionOptions = sessionOptions.Value;
         _clock = clock;
@@ -248,13 +247,11 @@ public class AccountService : IAccountService
             authClaims.Add(new Claim(ClaimTypes.Role, role));
         }
 
-        var jwtSecret = _configuration["JwtSettings:Secret"]
-            ?? "SuperSecretSecurityKeyThatIsAtLeast32BytesLongForHS256!";
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
 
         var tokenDescriptor = new JwtSecurityToken(
-            issuer: _configuration["JwtSettings:Issuer"] ?? "ResourceBookingApi",
-            audience: _configuration["JwtSettings:Audience"] ?? "ResourceBookingClients",
+            issuer: _jwtSettings.Issuer,
+            audience: _jwtSettings.Audience,
             expires: expiresAt,
             claims: authClaims,
             signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256)

@@ -12,6 +12,7 @@ public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProg
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseTestJwt();
         var databaseName = "IntegrationTestDb_" + Guid.NewGuid();
         builder.ConfigureServices(services =>
         {
