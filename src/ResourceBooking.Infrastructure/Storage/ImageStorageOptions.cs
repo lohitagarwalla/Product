@@ -3,6 +3,9 @@ namespace ResourceBooking.Infrastructure.Storage;
 public class ImageStorageOptions
 {
     public string RootPath { get; set; } = "App_Data/images";
+    // Supply the connection string through user secrets or environment configuration.
+    public string? AzureBlobConnectionString { get; set; }
+    public string AzureBlobContainerName { get; set; } = "images";
     public long MaxFileSizeBytes { get; set; } = 5 * 1024 * 1024;
     public int MaxDimension { get; set; } = 6000;
     public long MaxPixels { get; set; } = 16000000;

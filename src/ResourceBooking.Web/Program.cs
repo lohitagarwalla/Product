@@ -91,7 +91,6 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IAddressService, AddressService>();
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IImageService, ImageService>();
-builder.Services.AddSingleton<IImageStorage, LocalImageStorage>();
 builder.Services.AddScoped<ImageCleanupService>();
 builder.Services.AddHostedService<ImageCleanupWorker>();
 builder.Services.AddOptions<ImageStorageOptions>()
@@ -104,6 +103,15 @@ builder.Services.AddOptions<ImageStorageOptions>()
     .Validate(o => o.MaxImagesPerProduct > 0 && o.MaxImagesPerProduct <= 100 && o.DeletedProductRetentionDays >= 0,
         "Image count or retention settings are invalid.")
     .ValidateOnStart();
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddSingleton<IImageStorage, LocalImageStorage>();
+}
+else
+{
+    builder.Services.AddSingleton<IImageStorage, AzureBlobImageStorage>();
+}
 
 // 1. Add Custom Account Service
 builder.Services.AddScoped<IAccountService, AccountService>();
@@ -155,7 +163,7 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
     {
         var jwt = settings.Value;
         options.SaveToken = true;
-        options.RequireHttpsMetadata = false;
+        options.RequireHttpsMetadata = true;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -210,12 +218,11 @@ _ = app.Services.GetRequiredService<IOptions<LoginRateLimitOptions>>().Value;
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 //// Configure the HTTP request pipeline.
-//if (!app.Environment.IsDevelopment())
-//{
-//    app.UseExceptionHandler("/Home/Error");
-//    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-//    app.UseHsts();
-//}
+if (!app.Environment.IsDevelopment())
+{
+    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    app.UseHsts();
+}
 
 // 3. Configure Development Environment OpenAPI & Scalar UI Routes
 if (app.Environment.IsDevelopment())
@@ -232,7 +239,7 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// Seed roles and initial catalog data, plus the demo admin in Development
+// Apply database migrations and seed roles, plus the demo admin in Development.
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -242,16 +249,19 @@ using (var scope = app.Services.CreateScope())
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 
+        app.Logger.LogInformation("Applying database migrations and seeding roles.");
         await DbInitializer.SeedAsync(
             context,
             userManager,
             roleManager,
             seedDemoAdmin: app.Environment.IsDevelopment());
+        app.Logger.LogInformation("Database initialization completed successfully.");
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while seeding the database.");
+        logger.LogCritical(ex, "Database migration or seeding failed. Application startup is aborted.");
+        throw;
     }
 }
 app.UseWhen(context => !context.Request.Path.StartsWithSegments("/api"), branch =>
