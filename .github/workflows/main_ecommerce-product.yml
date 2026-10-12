@@ -27,7 +27,14 @@ jobs:
         run: dotnet build src/ResourceBooking.Web/ResourceBooking.Web.csproj --configuration Release
 
       - name: dotnet publish
-        run: dotnet publish src/ResourceBooking.Web/ResourceBooking.Web.csproj --configuration Release --no-build --output "${{env.DOTNET_ROOT}}/myapp"
+        run: >-
+          dotnet publish src/ResourceBooking.Web/ResourceBooking.Web.csproj
+          --configuration Release
+          --runtime win-x86
+          --self-contained false
+          -p:UseAppHost=false
+          --output "${{env.DOTNET_ROOT}}/myapp"
+        # run: dotnet publish src/ResourceBooking.Web/ResourceBooking.Web.csproj --configuration Release --no-build --output "${{env.DOTNET_ROOT}}/myapp"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
