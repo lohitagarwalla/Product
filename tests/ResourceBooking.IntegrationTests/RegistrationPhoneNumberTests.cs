@@ -28,6 +28,8 @@ public class RegistrationPhoneNumberTests(CustomWebApplicationFactory<Program> f
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var auth = await response.Content.ReadFromJsonAsync<AuthResponseDto>();
         Assert.True(auth!.IsSuccess);
+        Assert.Equal(dto.LastName, auth.LastName);
+        Assert.Equal(expectedPhoneNumber, auth.PhoneNumber);
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var user = await db.Users.SingleAsync(u => u.Email == dto.Email);

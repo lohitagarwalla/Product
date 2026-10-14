@@ -225,15 +225,50 @@ public class RefreshTokenTests : IDisposable
         Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().RefreshSessions.CountAsync());
     }
 
-    private static async Task<(AuthResponseDto Auth, string Cookie, RegisterDto Registration)> Register(HttpClient client)
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("9123456789", "+919123456789")]
+    public async Task AuthResponses_ReturnProfileFields(string? phoneNumber, string? expectedPhoneNumber)
+    {
+        using var client = Client();
+        var (registered, _, registration) = await Register(client, phoneNumber);
+        Assert.Equal(registration.LastName, registered.LastName);
+        Assert.Equal(expectedPhoneNumber, registered.PhoneNumber);
+
+        using var login = await client.PostAsJsonAsync("/api/auth/login", new LoginDto
+        { Email = registration.Email, Password = registration.Password });
+        login.EnsureSuccessStatusCode();
+        using var loginJson = JsonDocument.Parse(await login.Content.ReadAsStringAsync());
+        Assert.Equal(registration.LastName, loginJson.RootElement.GetProperty("lastName").GetString());
+        Assert.Equal(expectedPhoneNumber, loginJson.RootElement.GetProperty("phoneNumber").GetString());
+
+        // Refresh must read current profile values from the database.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var user = await db.Users.SingleAsync(u => u.Id == registered.UserId);
+            user.LastName = "Updated";
+            user.PhoneNumber = expectedPhoneNumber is null ? "+918123456789" : null;
+            await db.SaveChangesAsync();
+        }
+
+        using var refresh = await SendCookie(client, "refresh", Cookie(login));
+        refresh.EnsureSuccessStatusCode();
+        using var refreshJson = JsonDocument.Parse(await refresh.Content.ReadAsStringAsync());
+        Assert.Equal("Updated", refreshJson.RootElement.GetProperty("lastName").GetString());
+        Assert.Equal(expectedPhoneNumber is null ? "+918123456789" : null,
+            refreshJson.RootElement.GetProperty("phoneNumber").GetString());
+    }
+
+    private static async Task<(AuthResponseDto Auth, string Cookie, RegisterDto Registration)> Register(HttpClient client, string? phoneNumber = null)
     {
         var dto = new RegisterDto
         {
             Email = $"{Guid.NewGuid():N}@example.com", Password = "Password123!", ConfirmPassword = "Password123!",
-            FirstName = "Refresh", LastName = "Tester"
+            FirstName = "Refresh", LastName = "Tester", PhoneNumber = phoneNumber
         };
         var response = await client.PostAsJsonAsync("/api/auth/register", dto);
-        response.EnsureSuccessStatusCode();
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
         var json = await response.Content.ReadAsStringAsync();
         Assert.False(JsonDocument.Parse(json).RootElement.TryGetProperty("refreshToken", out _));
         Assert.True(response.Headers.CacheControl!.NoStore);
