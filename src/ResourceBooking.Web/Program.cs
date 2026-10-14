@@ -240,30 +240,31 @@ if (app.Environment.IsDevelopment())
 }
 
 // Apply database migrations and seed roles, plus the demo admin in Development.
-using (var scope = app.Services.CreateScope())
-{
-    var services = scope.ServiceProvider;
-    try
-    {
-        var context = services.GetRequiredService<ApplicationDbContext>();
-        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+//using (var scope = app.Services.CreateScope())
+//{
+//    var services = scope.ServiceProvider;
+//    try
+//    {
+//        var context = services.GetRequiredService<ApplicationDbContext>();
+//        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+//        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 
-        app.Logger.LogInformation("Applying database migrations and seeding roles.");
-        await DbInitializer.SeedAsync(
-            context,
-            userManager,
-            roleManager,
-            seedDemoAdmin: app.Environment.IsDevelopment());
-        app.Logger.LogInformation("Database initialization completed successfully.");
-    }
-    catch (Exception ex)
-    {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogCritical(ex, "Database migration or seeding failed. Application startup is aborted.");
-        throw;
-    }
-}
+//        app.Logger.LogInformation("Applying database migrations and seeding roles.");
+//        await DbInitializer.SeedAsync(
+//            context,
+//            userManager,
+//            roleManager,
+//            seedDemoAdmin: app.Environment.IsDevelopment());
+//        app.Logger.LogInformation("Database initialization completed successfully.");
+//    }
+//    catch (Exception ex)
+//    {
+//        var logger = services.GetRequiredService<ILogger<Program>>();
+//        logger.LogCritical(ex, "Database migration or seeding failed. Application startup is aborted.");
+//        throw;
+//    }
+//}
+
 app.UseWhen(context => !context.Request.Path.StartsWithSegments("/api"), branch =>
     branch.UseStatusCodePagesWithReExecute("/Documentation"));
 
