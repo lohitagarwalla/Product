@@ -6,11 +6,29 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ResourceBooking.Infrastructure.Data;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Hosting;
+using ResourceBooking.Core.Constants;
 
 namespace ResourceBooking.IntegrationTests;
 
 public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProgram> where TProgram : class
 {
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        var host = base.CreateHost(builder);
+        using var scope = host.Services.CreateScope();
+        var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        foreach (var name in new[] { Roles.Admin, Roles.Employee, Roles.Customer, Roles.Owner })
+        {
+            if (roles.RoleExistsAsync(name).GetAwaiter().GetResult()) continue;
+            var result = roles.CreateAsync(new IdentityRole(name)).GetAwaiter().GetResult();
+            if (!result.Succeeded)
+                throw new InvalidOperationException(string.Join("; ", result.Errors.Select(e => e.Description)));
+        }
+        return host;
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseTestJwt();

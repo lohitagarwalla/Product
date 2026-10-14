@@ -203,7 +203,9 @@ public class AccountService : IAccountService
             UserId = user.Id,
             Email = user.Email ?? string.Empty,
             Roles = roles.ToList(),
-            FirstName = user.FirstName
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            PhoneNumber = user.PhoneNumber
         };
     }
 
