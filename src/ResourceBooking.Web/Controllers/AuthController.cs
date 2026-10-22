@@ -46,10 +46,10 @@ public class AuthController : ControllerBase
     /// Authenticate a user and receive a JWT Bearer token.
     /// </summary>
     [HttpPost("login")]
+    [AllowAnonymous]
+    [Consumes("application/json")]
     [EnableRateLimiting(LoginRateLimitPolicy.Name)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
-    [Consumes("application/json")]
-    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AuthResponseDto))]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
@@ -69,6 +69,7 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     [RefreshCookieRequest]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(AuthResponseDto))]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable, Type = typeof(ProblemDetails))]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Refresh(CancellationToken ct)
     {

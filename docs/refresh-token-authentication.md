@@ -21,6 +21,8 @@ Error behavior:
 
 - Missing, malformed, unknown, expired, revoked, or reused refresh token: `401`, generic error, refresh cookie deleted.
 - Missing or incorrect `X-Refresh-Token: 1` header: `400`, no session mutation.
+- Database connection-opening budget exhausted: `503` with generic ProblemDetails; cookie preserved.
+- Unexpected database failures, including failures during rotation: `500`; no automatic rotation replay.
 - A supplied Origin outside the configured allowlist or the API's own origin: `403`, no session mutation. The literal `null` origin is rejected.
 - Logout with no/unknown/already-revoked token: idempotent `200` and cookie deletion, provided the CSRF checks pass.
 - Login and registration require `application/json`; existing credential and validation failures retain their existing status codes.
@@ -62,6 +64,10 @@ The existing `rememberMe` request field does not change these approved defaults:
 - Retain consumed-token records while their session is unexpired to detect replay. Expired sessions can later be removed by an operational retention job; deleting a session cascades to its tokens. This change does not add a background cleanup job.
 
 ## Migration and local commands
+
+### Database auto-resume handling
+
+SQL connection opening uses the application-wide policy described in [Database connection resilience](database-connection-resilience.md). There is no refresh-specific lookup retry loop. Connection attempts may be retried before a command starts; token rotation and commit are never replayed automatically. A failure during rotation remains an uncertain outcome, so clients must not blindly repeat the refresh request.
 
 `20261008131701_AddRefreshSessions` adds the two tables, their foreign keys, and indexes. It does not alter existing user records or invalidate existing access JWTs. Existing users obtain a refresh cookie the next time they log in. Existing eight-hour access tokens keep their original expiration.
 

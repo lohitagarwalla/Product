@@ -48,8 +48,15 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
 // 2. Register DbContext with SQL Server
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddOptions<DatabaseConnectionRetryOptions>()
+    .Bind(builder.Configuration.GetSection(DatabaseConnectionRetryOptions.SectionName))
+    .Validate(o => o.TimeoutSeconds is > 0 and <= 90, "Database connection retry timeout must be 1-90 seconds.")
+    .ValidateOnStart();
+builder.Services.AddScoped<DatabaseConnectionInterceptor>();
+builder.Services.AddDbContext<ApplicationDbContext>((services, options) =>
+    options.UseSqlServer(connectionString)
+        .AddInterceptors(services.GetRequiredService<DatabaseConnectionInterceptor>()));
 
 // 3. Register ASP.NET Core Identity with Roles
 // AddIdentity<>() also configures and uses cookies for athenticate/authorize by default. but in this app we are using jwt for authentication. so commenting out this section. and instead will use AddIdentityCore

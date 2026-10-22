@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Text.Json;
+using System.Data.Common;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ResourceBooking.Core.Exceptions;
@@ -29,6 +30,11 @@ public class GlobalExceptionMiddleware
             // Pass request to the next middleware in the pipeline
             await _next(context);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            // The caller has disconnected; do not turn cancellation into a server error.
+            context.Abort();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "An unhandled exception occurred during request processing: {Message}", ex.Message);
@@ -47,6 +53,13 @@ public class GlobalExceptionMiddleware
 
         switch (exception)
         {
+            case DatabaseUnavailableException:
+                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                problemDetails.Status = StatusCodes.Status503ServiceUnavailable;
+                problemDetails.Title = "Service Unavailable";
+                problemDetails.Detail = "The database is temporarily unavailable. Please try again later.";
+                break;
+
             case AddressConflictException addressConflict:
                 context.Response.StatusCode = (int)HttpStatusCode.Conflict;
                 problemDetails.Status = (int)HttpStatusCode.Conflict;
@@ -68,7 +81,7 @@ public class GlobalExceptionMiddleware
                 problemDetails.Detail = "This item changed during your request. Reload it and retry.";
                 break;
 
-            case InvalidOperationException invalidOpEx:
+            case InvalidOperationException invalidOpEx when !HasDatabaseFailure(invalidOpEx):
                 // Domain validation or business rule violation
                 context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
                 problemDetails.Status = (int)HttpStatusCode.BadRequest;
@@ -111,5 +124,18 @@ public class GlobalExceptionMiddleware
         var json = JsonSerializer.Serialize(problemDetails, jsonOptions);
 
         return context.Response.WriteAsync(json);
+    }
+
+    private static bool HasDatabaseFailure(Exception exception)
+    {
+        // EF Core can wrap SQL connection/transient failures in InvalidOperationException.
+        // These are server failures, not invalid client requests.
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is DbException or DbUpdateException)
+                return true;
+        }
+
+        return false;
     }
 }
