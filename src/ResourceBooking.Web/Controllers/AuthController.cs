@@ -110,7 +110,7 @@ public class AuthController : ControllerBase
         HttpOnly = true,
         Secure = true,
         SameSite = SameSiteMode.None,
-        Path = "/api/auth",
+        Path = "/",
         IsEssential = true
     };
 }
