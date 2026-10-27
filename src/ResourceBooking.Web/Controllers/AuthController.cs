@@ -16,10 +16,12 @@ public class AuthController : ControllerBase
 {
     public const string RefreshCookieName = "__Secure-ResourceBooking.Refresh";
     private readonly IAccountService _accountService;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(IAccountService accountService)
+    public AuthController(IAccountService accountService, ILogger<AuthController> logger)
     {
         _accountService = accountService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -73,7 +75,14 @@ public class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Refresh(CancellationToken ct)
     {
-        var result = await _accountService.RefreshAsync(Request.Cookies[RefreshCookieName], ct);
+        var refreshCookie = Request.Cookies[RefreshCookieName];
+        var hasRefreshCookie = !string.IsNullOrWhiteSpace(refreshCookie);
+        // Temporary diagnostic: never log the cookie value or request headers.
+        _logger.LogInformation(
+            "Refresh session request: HasRefreshCookie={HasRefreshCookie}, TraceId={TraceId}",
+            hasRefreshCookie, HttpContext.TraceIdentifier);
+
+        var result = await _accountService.RefreshAsync(refreshCookie, ct);
         if (!result.IsSuccess)
         {
             Response.Cookies.Delete(RefreshCookieName, RefreshCookieOptions());
@@ -110,7 +119,7 @@ public class AuthController : ControllerBase
         HttpOnly = true,
         Secure = true,
         SameSite = SameSiteMode.None,
-        Path = "/",
+        Path = "/api/auth",
         IsEssential = true
     };
 }
