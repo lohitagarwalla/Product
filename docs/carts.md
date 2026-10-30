@@ -1,8 +1,8 @@
 # Saved carts and checkout
 
 Saved carts restore a user's items and selected address when they return. Checkout
-uses the items and full address submitted to `POST /api/orders`, independently of
-the saved cart. Cart requests and responses no longer expose a cart row version.
+uses the submitted items and an owned saved address identified by `addressId` in
+`POST /api/orders`, independently of the cart selection. Cart requests and responses no longer expose a cart row version.
 
 ## Cart API
 
@@ -36,39 +36,38 @@ version token. Address-edit and order-status version checks remain unchanged.
 {
   "requestId": "1a193494-a7d3-4393-994c-23cbd90e6295",
   "items": [{ "productId": 10, "quantity": 2 }],
-  "deliveryAddress": {
-    "recipientName": "Lohit", "phoneNumber": "9876543210", "addressLine1": "House 10", "addressLine2": null,
-    "city": "Hyderabad", "state": "Telangana", "postalCode": "500001", "countryCode": "IN"
-  }
+  "addressId": 12
 }
 ```
 
-Missing/invalid address details, empty/null items, invalid quantities/IDs,
+Missing/nonpositive address IDs, empty/null items, invalid quantities/IDs,
 duplicates, unavailable products, mixed currencies, and excessive totals return
-400. The service uses current database prices and saves product and address
-snapshots. No saved cart or saved-address record is required. Submitted products
-and quantities need not match the saved cart. Editing/deleting the saved address
-does not invalidate the submitted snapshot.
+400. A nonexistent address or an address belonging to another user returns 404.
+The service queries UserAddresses by both address ID and the authenticated user ID.
+It snapshots the saved address (including its phone) and current product prices.
+Client-supplied deliveryAddress fields are not used. A saved cart is optional;
+a saved address owned by the caller is required.
 
-Order creation and removal of purchased cart products share one SQL transaction.
-Each saved cart item whose product ID appears in the order is removed entirely,
-even when its saved quantity differs. Other products and selectedAddressId remain.
-Failures roll back both order creation and cart removal. Existing server-side user
-locks serialize cart, address and checkout writes; clients do not manage versions.
+Order creation commits first. Purchased products are then deleted from the cart in
+a separate transaction without quantity or cart row-version checks. Matching
+lines are removed entirely and selectedAddressId resets to the caller's current
+default address (or null if none exists). Other products remain. Both cleanup
+writes commit together; a replay does not reset a later address selection. Cleanup
+failure is logged and leaves the order committed. Cleanup is best effort, with no
+background retry. Order creation no longer acquires the shared user lock or uses
+RepeatableRead; ordinary cart/address operations keep their existing locking.
 
-201 creates the order; retrying the same requestId with the same normalized address
-and items returns 200 with the existing order. Item order is irrelevant. Changed
-items or address details with the same requestId return 409. A replay never removes
-cart items again. Keep the original request snapshot for retries after a lost
-response. This replaces the previous items-only/cart-version request hashes;
-old in-flight attempts should be reviewed against order history before starting anew.
+201 creates the order; retrying the same requestId with the same addressId and
+items returns 200 with the original order. Item order is irrelevant. Changing the
+addressId or items with the same requestId returns 409. Saved-address edits or
+deletion after success do not change the order or prevent replay. A replay never
+removes cart items again. New orders always verify current address ownership.
 
-The optional phoneNumber follows the [address phone rules](USER-ADDRESSES.md).
-Cart selectedAddress and order deliveryAddress responses include the normalized phone.
-Checkout snapshots the submitted phone independently of the account or saved address.
-Equivalent local/+91 inputs replay the same order; changing the phone with the same
-requestId returns 409. Absent/blank phones preserve the existing address-based hash
-format, allowing retries for orders created before phone support.
+The frontend stores address text for display, but sends only addressId, requestId,
+and items. Older pending attempts without addressId cannot be automatically
+retried: review order history before starting anew. Existing orders with the old
+address-content request hash remain readable; reusing their key with the new
+request format returns 409. No database migration is required for this contract change.
 
 ## Database and verification
 
@@ -81,6 +80,6 @@ still be applied on databases that do not have those tables/columns.
 
 CartEndpointsTests uses InMemory with a test rowversion simulator for contract
 checks. CartSqlServerTests additionally verifies simultaneous retries, quantity
-writes and rollback on a dedicated SQL Server database. InMemory tests cannot
+writes, address ownership, and cleanup-failure isolation on a dedicated SQL Server database. InMemory tests cannot
 verify SQL Server constraints, locks or rollback. Set ORDER_TEST_SQLSERVER_CONNECTION
 to a working test server when LocalDB is unavailable.

@@ -7,8 +7,8 @@ public class OrderCreateDto : IValidatableObject
 {
     public Guid RequestId { get; set; }
 
-    [Required]
-    public DeliveryAddressWriteDto DeliveryAddress { get; set; } = null!;
+    [Range(1, int.MaxValue)]
+    public int AddressId { get; set; }
 
     [Required, MinLength(1), MaxLength(100)]
     public List<OrderItemCreateDto> Items { get; set; } = [];
@@ -21,10 +21,6 @@ public class OrderCreateDto : IValidatableObject
             Items.Select(i => i.ProductId).Distinct().Count() != Items.Count))
             yield return new ValidationResult("Supply each product exactly once; items cannot be null.", [nameof(Items)]);
     }
-}
-
-public class DeliveryAddressWriteDto : AddressWriteDto
-{
 }
 
 public class OrderItemCreateDto
