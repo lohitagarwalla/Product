@@ -5,10 +5,10 @@ This backend supports order creation, user/admin searches, shipping, delivery,
 cancellation, and an append-only status history. Payments, refunds, stock,
 shipping-provider integration, and frontend pages are not included.
 
-`POST /api/orders` accepts submitted items and required delivery-address details;
+`POST /api/orders` accepts submitted items and a required saved `addressId`;
 see [Saved carts and checkout](carts.md). Order creation removes only matching
-product IDs from the saved cart, atomically. Existing orders may have a null
-deliveryAddress; new orders require and save an address snapshot.
+product IDs from the saved cart after committing the order. Existing orders may have a null
+deliveryAddress; new orders load an address owned by the authenticated user and save its snapshot.
 The snapshot includes optional phoneNumber, normalized to +91 for Indian mobiles.
 It is independent of the account phone and remains unchanged after saved-address edits.
 Apply AddPhoneNumbersToAddresses to add nullable phone columns for saved addresses
@@ -70,10 +70,7 @@ caching. Another user's order returns 404 unless the caller is an admin.
     { "productId": 1, "quantity": 2 },
     { "productId": 2, "quantity": 1 }
   ],
-  "deliveryAddress": {
-    "recipientName": "Lohit", "addressLine1": "House 10", "addressLine2": null,
-    "city": "Hyderabad", "state": "Telangana", "postalCode": "500001", "countryCode": "IN"
-  }
+  "addressId": 12
 }
 ```
 
@@ -90,11 +87,16 @@ caching. Another user's order returns 404 unless the caller is an admin.
 - Current published product images may be included as `imageUrl`. This is not
   an image snapshot: if absent or the URL no longer works, show a placeholder.
 - The unique `(UserId, RequestId)` index prevents concurrent duplicate orders.
-  Reusing the key with the same products/quantities and normalized address returns the existing order
+  Reusing the key with the same products/quantities and addressId returns the existing order
   in its current state, even if catalog data changed. Item order is irrelevant.
-  Reusing it with different products/quantities or address details returns 409.
-- Creation uses a transaction with repeatable-read catalog access, so catalog
-  edits cannot invalidate the product snapshots between validation and commit.
+  Reusing it with different products/quantities or addressId returns 409.
+- A positive addressId is required. Missing or another user's addresses return 404.
+  The server snapshots the stored address; client-supplied address fields are ignored.
+- Order, items, and initial history commit atomically using SaveChanges. Catalog
+  values are captured when read, without RepeatableRead. Cart cleanup runs afterward
+  without row-version checks; cleanup failure does not roll back the order.
+- Replaying a successful request returns its original address snapshot even after
+  the saved address has been edited or deleted.
 
 An order response contains `id`, `orderNumber`, `userId`, `status`, `currency`,
 `totalAmount`, UTC lifecycle timestamps, cancellation actor/reason, `rowVersion`,

@@ -45,9 +45,10 @@ The first address becomes default regardless of `makeDefault`. Additional addres
 become default only when `makeDefault` is true or the default endpoint is called.
 An ordinary update cannot change default status. Deleting a default promotes the oldest
 remaining address (CreatedAt, then Id); deleting the last address leaves no default.
-Deletion is permanent. Saved addresses can be selected in a cart. Checkout uses the
-submitted deliveryAddress snapshot, including its phone, rather than automatically
-copying the selected address. Existing order snapshots are unaffected by address edits.
+Deletion is permanent. Saved addresses can be selected in a cart. Checkout accepts
+addressId, verifies it belongs to the authenticated user, and copies the saved address
+including its phone into the order. It does not implicitly use the cart selection.
+Existing order snapshots are unaffected by address edits or deletion.
 
 ## Update, select default, and delete
 

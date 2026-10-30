@@ -55,7 +55,7 @@ public class ImageCleanupWorker(IServiceScopeFactory scopes, IOptions<ImageStora
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!options.Value.CleanupEnabled) return;
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(5));
+        using var timer = new PeriodicTimer(TimeSpan.FromHours(5));
         try
         {
             do

@@ -39,6 +39,34 @@ public class OrderWebApplicationFactory : WebApplicationFactory<Program>
         ConnectionString = connection.ConnectionString;
     }
 
+    protected override Microsoft.Extensions.Hosting.IHost CreateHost(Microsoft.Extensions.Hosting.IHostBuilder builder)
+    {
+        var host = base.CreateHost(builder);
+        InitializeCheckoutDatabaseAsync(host.Services).GetAwaiter().GetResult();
+        return host;
+    }
+
+    internal static async Task InitializeCheckoutDatabaseAsync(IServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
+        var roles = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.RoleManager<Microsoft.AspNetCore.Identity.IdentityRole>>();
+        await DbInitializer.SeedAsync(db, users, roles, seedDemoAdmin: false);
+        var admin = await users.FindByEmailAsync("admin@company.com");
+        if (admin is null)
+        {
+            admin = new ApplicationUser { UserName = "admin@company.com", Email = "admin@company.com", FirstName = "Test", LastName = "Admin" };
+            var created = await users.CreateAsync(admin, "Admin123!");
+            if (!created.Succeeded) throw new InvalidOperationException("Could not create checkout test admin.");
+        }
+        if (!await users.IsInRoleAsync(admin, "Admin"))
+        {
+            var assigned = await users.AddToRoleAsync(admin, "Admin");
+            if (!assigned.Succeeded) throw new InvalidOperationException("Could not assign checkout test admin role.");
+        }
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseTestJwt();
@@ -55,7 +83,7 @@ public class OrderWebApplicationFactory : WebApplicationFactory<Program>
         });
     }
 
-    public ApplicationDbContext CreateDb(SaveChangesInterceptor? interceptor = null)
+    public ApplicationDbContext CreateDb(IInterceptor? interceptor = null)
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(ConnectionString);
         if (interceptor is not null) options.AddInterceptors(interceptor);
@@ -104,12 +132,20 @@ public class OrderEndpointsTests(OrderWebApplicationFactory factory) : IClassFix
     private static OrderCreateDto Request(params (int ProductId, int Quantity)[] items) => new()
     {
         RequestId = Guid.NewGuid(),
-        DeliveryAddress = new DeliveryAddressWriteDto { RecipientName = "Order Customer", AddressLine1 = "1 Main Street", City = "Bengaluru", State = "Karnataka", PostalCode = "560001", CountryCode = "IN" },
         Items = items.Select(i => new OrderItemCreateDto { ProductId = i.ProductId, Quantity = i.Quantity }).ToList()
     };
 
+    private static async Task<int> AddressIdAsync(HttpClient user)
+    {
+        var response = await user.PostAsJsonAsync("/api/profile/addresses", new AddressCreateDto
+        { RecipientName = "Order Customer", AddressLine1 = "1 Main Street", City = "Bengaluru", State = "Karnataka", PostalCode = "560001", CountryCode = "IN" });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<AddressResponseDto>())!.Id;
+    }
+
     private static async Task<OrderResponseDto> CreateAsync(HttpClient user, OrderCreateDto request)
     {
+        if (request.AddressId == 0) request.AddressId = await AddressIdAsync(user);
         var response = await user.PostAsJsonAsync("/api/orders", request);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
@@ -184,7 +220,7 @@ public class OrderEndpointsTests(OrderWebApplicationFactory factory) : IClassFix
         var requestId = Guid.NewGuid();
         var response = await owner.PostAsJsonAsync("/api/orders", new
         {
-            deliveryAddress = new DeliveryAddressWriteDto { RecipientName = "Order Customer", AddressLine1 = "1 Main Street", City = "Bengaluru", State = "Karnataka", PostalCode = "560001", CountryCode = "IN" },
+            addressId = await AddressIdAsync(owner),
             requestId, userId = "forged-owner", totalAmount = 0m, currency = "USD", status = "Delivered",
             items = new[] { new { productId = product.Id, quantity = 2, unitPrice = 0m, lineTotal = 0m } }
         });
@@ -195,7 +231,7 @@ public class OrderEndpointsTests(OrderWebApplicationFactory factory) : IClassFix
         Assert.Equal("INR", order.Currency);
         Assert.Equal(OrderStatus.Placed, order.Status);
         var otherOrder = await CreateAsync(other, new OrderCreateDto
-        { DeliveryAddress = new DeliveryAddressWriteDto { RecipientName = "Order Customer", AddressLine1 = "1 Main Street", City = "Bengaluru", State = "Karnataka", PostalCode = "560001", CountryCode = "IN" }, RequestId = requestId, Items = [new() { ProductId = product.Id, Quantity = 2 }] });
+        { AddressId = await AddressIdAsync(other), RequestId = requestId, Items = [new() { ProductId = product.Id, Quantity = 2 }] });
         Assert.NotEqual(order.Id, otherOrder.Id);
         Assert.NotEqual(order.UserId, otherOrder.UserId);
     }
@@ -341,8 +377,12 @@ public class OrderEndpointsTests(OrderWebApplicationFactory factory) : IClassFix
             new OrderCreateDto { RequestId = Guid.NewGuid(), Items = [null!] },
             Request(Enumerable.Range(1, 101).Select(id => (id, 1)).ToArray())
         };
+        var addressId = await AddressIdAsync(user);
         foreach (var request in requests)
+        {
+            request.AddressId = addressId;
             Assert.Equal(HttpStatusCode.BadRequest, (await user.PostAsJsonAsync("/api/orders", request)).StatusCode);
+        }
         Assert.Empty((await user.GetFromJsonAsync<OrderPageDto>("/api/orders"))!.Items);
     }
 
@@ -394,8 +434,10 @@ public class OrderEndpointsTests(OrderWebApplicationFactory factory) : IClassFix
         var product = await ProductAsync(admin);
         var initial = await CreateAsync(owner, Request((product.Id, 1)));
         var request = Request((product.Id, 2));
-        await using var firstDb = factory.CreateDb();
-        await using var secondDb = factory.CreateDb();
+        request.AddressId = await AddressIdAsync(owner);
+        var barrier = new TwoSavesBarrier();
+        await using var firstDb = factory.CreateDb(barrier);
+        await using var secondDb = factory.CreateDb(barrier);
         var results = await Task.WhenAll(
             new OrderService(firstDb).CreateAsync(request, initial.UserId, default),
             new OrderService(secondDb).CreateAsync(request, initial.UserId, default));
